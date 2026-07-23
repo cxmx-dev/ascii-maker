@@ -1,0 +1,425 @@
+/* ascii-maker — device-aware layout */
+
+:root {
+  --bg: #0d0f12;
+  --bg-panel: #14181f;
+  --bg-elev: #1a2029;
+  --border: #2a3340;
+  --text: #e8edf4;
+  --muted: #8b97a8;
+  --accent: #6ee7b7;
+  --accent-dim: #34d399;
+  --danger: #f87171;
+  --radius: 12px;
+  --pad: 12px;
+  --touch-min: 44px;
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Cascadia Code", "Consolas", "SF Mono", "Menlo", ui-monospace, monospace;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+body.theme-light {
+  --bg: #f4f6f8;
+  --bg-panel: #ffffff;
+  --bg-elev: #eef1f5;
+  --border: #d0d7e0;
+  --text: #12161c;
+  --muted: #5c6775;
+  --accent: #059669;
+  --accent-dim: #047857;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  padding-bottom: var(--safe-b);
+  padding-top: var(--safe-t);
+}
+
+.app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--pad);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.fp {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  padding: 0.15em 0.55em;
+  vertical-align: middle;
+  margin-left: 0.35em;
+}
+
+.tag {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn {
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn.primary {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-elev));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--text);
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.btn.flash {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+  gap: 12px;
+  min-height: 0;
+  /* so stage can fill remaining viewport */
+  height: 0; /* flex child trick: grow with flex:1, don't push past viewport */
+  flex-grow: 1;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 0;
+}
+
+.controls {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  max-height: calc(100dvh - 100px);
+}
+
+.drop {
+  position: relative;
+  border: 1.5px dashed var(--border);
+  border-radius: 10px;
+  background: var(--bg-elev);
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.drop.drag {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elev));
+}
+
+.drop.has-image {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.drop-label {
+  pointer-events: none;
+  text-align: center;
+  padding: 12px;
+  z-index: 1;
+}
+
+.drop-title {
+  display: block;
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.drop-sub {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.field-label em {
+  font-style: normal;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+select,
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-dim);
+}
+
+select {
+  min-height: var(--touch-min);
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+input[type="range"] {
+  min-height: 28px;
+  touch-action: none;
+}
+
+html.input-touch input[type="range"] {
+  min-height: 36px;
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  font-size: 0.88rem;
+  font-weight: 550;
+  cursor: pointer;
+  user-select: none;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-dim);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.status {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  min-height: 1.2em;
+}
+
+.status.err {
+  color: var(--danger);
+}
+
+.meta {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  word-break: break-all;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+}
+
+.stage-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fit mode: no scroll — entire art contained in the stage */
+.stage-viewport.is-fit {
+  overflow: hidden;
+}
+
+.scale-wrap {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden; /* clip unscaled <pre> to scaled visual box */
+}
+
+.output {
+  margin: 0;
+  padding: 0;
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.05;
+  white-space: pre;
+  tab-size: 2;
+  color: var(--text);
+  background: transparent;
+  user-select: text;
+  /* when scaled, keep layout size = unscaled for measure, wrap sets visual box */
+  will-change: transform;
+}
+
+body:not(.fit-on) .stage-viewport {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+body:not(.fit-on) .output {
+  padding: 4px;
+}
+
+/* phone / narrow: stack */
+@media (max-width: 700px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(40vh, 1fr);
+  }
+
+  .controls {
+    max-height: none;
+  }
+
+  .layout {
+    height: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .stage {
+    min-height: 45dvh;
+    height: auto;
+  }
+
+  .brand h1 {
+    font-size: 1.1rem;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .actions .btn {
+    flex: 1;
+  }
+}
+
+html.device-phone .app {
+  padding: 10px;
+  gap: 10px;
+}
+
+html.device-phone .stage-viewport {
+  padding: 8px;
+}
+
+.actions .btn {
+  white-space: nowrap;
+}
+
+/* fine pointer: slightly denser controls */
+html.input-fine .btn {
+  min-height: 36px;
+}
+
+html.input-fine select {
+  min-height: 36px;
+}

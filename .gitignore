@@ -1,0 +1,29 @@
+# User-only private twins (never publish)
+USER-*.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vscode/
+.idea/
+
+# Env / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Local scratch
+tmp/
+temp/
+dist/
+node_modules/
+
+# Never publish (local only)
+pics/
+*.7z
+*convo*
+
