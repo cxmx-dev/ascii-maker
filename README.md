@@ -1,5 +1,7 @@
 # ascii-maker
 
+**Play:** https://cxmx-dev.github.io/ascii-maker/
+
 Local, real-time **image → Braille / Unicode block / ASCII** converter. Drop an image, tweak controls, copy or download text/PNG. All processing is client-side (canvas) — nothing is uploaded.
 
 **Fingerprint:** `am-v4` (page title, brand badge, meta line)
@@ -92,20 +94,35 @@ Images stay in the browser. Do not commit personal sample images you do not want
 
 ## Files (public tree)
 
+Only these ship to GitHub / Pages (whitelist — never `git add .`):
+
 ```
 index.html
 device.js
 app.js
 styles.css
 README.md
-AGENTS.md
-SYNC.md
 .gitignore
+.nojekyll
 ```
 
-`USER-*.md` is gitignored (machine-only notes).
+`USER-*.md`, local hub scripts, `pics/`, archives, and session notes stay off the publish set. This-machine paths: see `USER-NOTES.md` (not published).
+
+## Deploy habit (anonymous)
+
+| When | From the hub folder |
+|------|---------------------|
+| First Pages create | `.\scripts\push-pages.ps1 -Repo ascii-maker` |
+| Later updates | `.\scripts\start.ps1 -Repo ascii-maker` |
+
+Full walkthrough (wire scripts, whitelist, git identity, failure catalog): local **`USER-NOTES.md`**.
 
 ## Version History
+
+72226 11:09:56:70 PM CST
+• **First GitHub Pages live:** https://cxmx-dev.github.io/ascii-maker/
+• Public whitelist: 7 files (html/js/css/readme/gitignore/nojekyll); dual-doc + hub start/push scripts local-only.
+• Docs: deploy habit + pointer to machine tutorial in `USER-NOTES.md`.
 
 72226 9:54:25:62 PM CST
 • `am-v4`: **Aspect ratio** matches the original image (was too tall, especially Braille).
