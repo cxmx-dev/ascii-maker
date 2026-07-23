@@ -119,6 +119,14 @@ Full walkthrough (wire scripts, whitelist, git identity, failure catalog): local
 
 ## Version History
 
+72226 11:27:49:40 PM CST
+• Docs: hub-wide privacy scan reading notes (project still clean; other Repos hits are backlog). Pointers in local `USER-NOTES` / hub `Repos\PRIVACY.md`.
+• Product/play link unchanged (`am-v4`).
+
+72226 11:16:55:09 PM CST
+• Docs: machine-only X/social post bank + deploy tutorial pointer in `USER-NOTES.md` (not published).
+• SYNC handoff refreshed; play link + whitelist unchanged (`am-v4`).
+
 72226 11:09:56:70 PM CST
 • **First GitHub Pages live:** https://cxmx-dev.github.io/ascii-maker/
 • Public whitelist: 7 files (html/js/css/readme/gitignore/nojekyll); dual-doc + hub start/push scripts local-only.
