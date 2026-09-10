@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <title>ascii-maker · am-v4</title>
+  <script src="device.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="theme-dark">
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <h1>ascii-maker <span id="fp" class="fp">am-v4</span></h1>
+        <p class="tag">Braille · block · shade — local, real-time</p>
+      </div>
+      <div class="actions">
+        <button type="button" id="btnCopy" class="btn primary">Copy</button>
+        <button type="button" id="btnDownload" class="btn">.txt</button>
+        <button type="button" id="btnPng" class="btn">PNG</button>
+        <button type="button" id="btnClear" class="btn ghost">Clear</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="panel controls" aria-label="Controls">
+        <div id="drop" class="drop" role="region" aria-label="Image drop zone">
+          <input type="file" id="file" accept="image/*" class="file-input" />
+          <label for="file" class="drop-label">
+            <span class="drop-title">Drop image</span>
+            <span class="drop-sub">or tap to choose · paste works too</span>
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Mode</span>
+          <select id="mode">
+            <option value="braille" selected>Braille (2×4)</option>
+            <option value="half">Half blocks (2×2)</option>
+            <option value="blocks">Blocks ░▒▓█</option>
+            <option value="blocks_dense">Blocks dense ▁…█</option>
+            <option value="ascii">ASCII simple</option>
+            <option value="ascii_dense">ASCII dense</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Width <em id="widthVal">60</em> chars</span>
+          <input type="range" id="width" min="16" max="200" value="60" step="1" />
+        </label>
+
+        <label class="field" id="thresholdRow">
+          <span class="field-label">Threshold <em id="thresholdVal">128</em></span>
+          <input type="range" id="threshold" min="1" max="254" value="128" step="1" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Contrast <em id="contrastVal">1.00</em></span>
+          <input type="range" id="contrast" min="0.4" max="2.5" value="1" step="0.05" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Brightness <em id="brightnessVal">0</em></span>
+          <input type="range" id="brightness" min="-80" max="80" value="0" step="1" />
+        </label>
+
+        <label class="field" id="previewSizeRow">
+          <span class="field-label">Preview size <em id="fontSizeVal">10px</em></span>
+          <input type="range" id="fontSize" min="4" max="22" value="10" step="1" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">PNG export size <em id="exportPxVal">14px</em> / char</span>
+          <input type="range" id="exportPx" min="6" max="40" value="14" step="1" />
+        </label>
+
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="fitView" checked /> Fit to view</label>
+          <label class="check"><input type="checkbox" id="invert" /> Invert</label>
+          <label class="check"><input type="checkbox" id="dither" checked /> Dither</label>
+          <label class="check"><input type="checkbox" id="darkBg" checked /> Dark bg</label>
+        </div>
+        <p id="ditherHint" class="hint">Dither before threshold (Braille / half-blocks)</p>
+        <p class="hint">Fit keeps the full art on screen. Width still sets resolution — PNG/.txt export stay full size.</p>
+
+        <p id="status" class="status" role="status"></p>
+        <p id="meta" class="meta"></p>
+      </aside>
+
+      <main class="panel stage" aria-label="Output">
+        <div id="stageViewport" class="stage-viewport">
+          <div id="scaleWrap" class="scale-wrap">
+            <pre id="output" class="output" spellcheck="false"></pre>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

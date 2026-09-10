@@ -1,0 +1,24 @@
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vscode/
+.idea/
+
+# Env / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Local scratch
+tmp/
+temp/
+dist/
+node_modules/
+
+pics/
+*.7z
