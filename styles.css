@@ -463,4 +463,6 @@ html.input-touch .check input { width: 22px; height: 22px; }
 .tint-pick { width: 44px; height: 44px; padding: 2px; border: 2px solid rgba(127, 127, 127, 0.4); border-radius: 10px; background: transparent; cursor: pointer; }
 .field[hidden] { display: none; }
 .controls > * { flex-shrink: 0; }
+.zc { position: relative; }
+.zc i { position: absolute; left: 0; top: 0; width: 0; font-style: normal; font-family: "Cascadia Code", Consolas, ui-monospace, monospace; pointer-events: none; }
 .zalgo-check { margin-top: 8px; min-height: 44px; display: flex; align-items: center; gap: 8px; }

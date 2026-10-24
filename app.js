@@ -138,7 +138,8 @@ var Z_UP = zr(0x300, 0x315) + zr(0x33d, 0x344) + '\u0346\u034a\u034b\u034c\u0350
 var Z_MID = zr(0x334, 0x338);
 var Z_DN = zr(0x316, 0x319) + zr(0x31c, 0x333) + zr(0x339, 0x33c) + '\u0345\u0347\u0348\u0349\u034d\u034e\u0353\u0354\u0355\u0356\u0359\u035a';
 function zRng(s) { s >>>= 0; return function () { s = (s + 0x6d2b79f5) >>> 0; var t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-// Only stack on glyphs the mono font itself has; fallback-font glyphs (Braille, rare blocks) show tofu.
+// Glyphs the mono font has take marks inline. Fallback-font glyphs (Braille, quadrants) would show
+// tofu, so their marks ride on a zero-width overlay NBSP in the mono font instead (no widening).
 function zOk(k) { return k > 32 && (k < 0x2500 || k === 0x2588 || k === 0x2591 || k === 0x2592 || k === 0x2593 || k === 0x2580 || k === 0x2584); }
 /** Per-cell mark strings (rows x cols) or null when off. Blanks stay clean. */
 function zalgoMarks(text, z) {
@@ -150,7 +151,7 @@ function zalgoMarks(text, z) {
     var row = [];
     for (c = 0; c < lines[r].length; c++) {
       m = '';
-      if (zOk(lines[r].charCodeAt(c))) {
+      if (!isBlankChar(lines[r].charAt(c))) {
         var cnt = Math.max(1, Math.round(n * (0.5 + rnd())));
         for (k = 0; k < cnt; k++) m += pool.charAt((rnd() * pool.length) | 0);
       }
@@ -160,10 +161,10 @@ function zalgoMarks(text, z) {
   }
   return out;
 }
-function zJoin(line, rm, a, b) {
+function zJoin(line, rm, a, b, safe) {
   if (!rm) return line.slice(a, b);
   var s = '', i;
-  for (i = a; i < b; i++) s += line.charAt(i) + (rm[i] || '');
+  for (i = a; i < b; i++) s += line.charAt(i) + (safe && !zOk(line.charCodeAt(i)) ? '' : rm[i] || '');
   return s;
 }
 /** Text for copy/.txt: base art with Zalgo marks merged in. */
@@ -194,12 +195,13 @@ function colorHtml(text, colors, zm) {
       var ch = line.charAt(c);
       var col = isBlankChar(ch) ? cur : row[c];
       if (col !== cur && buf) {
-        parts.push(cur ? '<span style="color:' + cur + '">' + escHtml(buf) + '</span>' : escHtml(buf));
+        parts.push(cur ? '<span style="color:' + cur + '">' + buf + '</span>' : buf);
         buf = '';
       }
-      cur = col; buf += ch + (rm && rm[c] || '');
+      var m = rm && rm[c] || '';
+      cur = col; buf += !m ? escHtml(ch) : zOk(ch.charCodeAt(0)) ? escHtml(ch) + m : '<span class="zc">' + ch + '<i>\u00a0' + m + '</i></span>';
     }
-    if (buf) parts.push(cur ? '<span style="color:' + cur + '">' + escHtml(buf) + '</span>' : escHtml(buf));
+    if (buf) parts.push(cur ? '<span style="color:' + cur + '">' + buf + '</span>' : buf);
     html.push(parts.join(''));
   }
   return html.join('\n');
@@ -603,7 +605,8 @@ function convert() {
   state.lastColors = s.color ? buildColorRows(img, text, s.colorMode, s.tint, s.colorAmount) : null;
   state.zMarks = zalgoMarks(text, getZalgo());
   if (state.lastColors) out.innerHTML = colorHtml(text, state.lastColors, state.zMarks);
-  else out.textContent = outText();
+  else if (state.zMarks) out.innerHTML = colorHtml(text, [], state.zMarks);
+  else out.textContent = text;
   out.style.lineHeight = (s.mode === 'braille' ? 1.05 : 1.0);
   // Fit mode uses a fixed measure size then scales; free mode uses slider
   if (s.fitView) {
@@ -989,7 +992,13 @@ function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg, 
       // Slight letter-spacing fix: draw per line
       var i;
       for (i = 0; i < rows; i++) {
-        if (!colors) { ctx.fillText(zJoin(lines[i], zm && zm[i], 0, lines[i].length), pad, pad + i * lineH); continue; }
+        var zr0 = zm && zm[i], dflt = ctx.fillStyle, q;
+        if (zr0) for (q = 0; q < lines[i].length; q++) if (zr0[q] && !zOk(lines[i].charCodeAt(q))) {
+          ctx.fillStyle = (colors && colors[i] && colors[i][q]) || dflt;
+          ctx.fillText('\u00a0' + zr0[q], pad + q * cellW, pad + i * lineH);
+        }
+        ctx.fillStyle = dflt;
+        if (!colors) { ctx.fillText(zJoin(lines[i], zr0, 0, lines[i].length, 1), pad, pad + i * lineH); continue; }
         // Color: draw runs of same color at their cell offset
         var ln = lines[i], crow = colors[i] || [], j = 0;
         while (j < ln.length) {
@@ -997,7 +1006,7 @@ function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg, 
           var k2 = j + 1;
           while (k2 < ln.length && (isBlankChar(ln.charAt(k2)) || crow[k2] === crow[j])) k2++;
           ctx.fillStyle = crow[j] || ctx.fillStyle;
-          ctx.fillText(zJoin(ln, zm && zm[i], j, k2), pad + j * cellW, pad + i * lineH);
+          ctx.fillText(zJoin(ln, zr0, j, k2, 1), pad + j * cellW, pad + i * lineH);
           j = k2;
         }
       }
