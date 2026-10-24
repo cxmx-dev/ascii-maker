@@ -83,7 +83,15 @@ function toggleSet(cur, set) {
 }
 /** Average color per character: draw the image at cols x rows (browser box-filters it). */
 var colorCanvas = null;
-function buildColorRows(img, text) {
+function hexToRgb(h) {
+  var m = /^#?([0-9a-f]{6})$/i.exec(h || '');
+  if (!m) return [0, 255, 65];
+  var n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function buildColorRows(img, text, cm, tint, amount) {
+  var tintRgb = cm === 'tint' ? hexToRgb(tint) : null;
+  var amt = clamp((amount == null ? 100 : amount) / 100, 0, 1);
   var lines = text.split('\n');
   var rows = lines.length, cols = 0, i;
   for (i = 0; i < rows; i++) if (lines[i].length > cols) cols = lines[i].length;
@@ -112,7 +120,12 @@ function buildColorRows(img, text) {
     for (c = 0; c < cols; c++) {
       k = (r * cols + c) * 4;
       // 12-bit color (#rgb) so neighbouring chars share runs
-      row[c] = '#' + hex[px[k] >> 4] + hex[px[k + 1] >> 4] + hex[px[k + 2] >> 4];
+      var pr0 = px[k], pg0 = px[k + 1], pb0 = px[k + 2];
+      var gy = 0.2126 * pr0 + 0.7152 * pg0 + 0.0722 * pb0;
+      if (tintRgb) { pr0 = tintRgb[0] * gy / 255; pg0 = tintRgb[1] * gy / 255; pb0 = tintRgb[2] * gy / 255; }
+      // Color amount: blend with grayscale (1 = full color, 0 = gray)
+      pr0 = gy + (pr0 - gy) * amt; pg0 = gy + (pg0 - gy) * amt; pb0 = gy + (pb0 - gy) * amt;
+      row[c] = '#' + hex[clamp(pr0 | 0, 0, 255) >> 4] + hex[clamp(pg0 | 0, 0, 255) >> 4] + hex[clamp(pb0 | 0, 0, 255) >> 4];
     }
     out.push(row);
   }
@@ -209,6 +222,9 @@ function getSettings() {
     exportPx: parseInt($('exportPx').value, 10) || 14,
     fitView: $('fitView') ? $('fitView').checked : true,
     color: $('color') ? $('color').checked : false,
+    colorMode: $('color') && $('color').checked ? ($('color').dataset.mode || 'color') : 'mono',
+    tint: $('tint') ? $('tint').value : '#00ff41',
+    colorAmount: $('colorAmount') ? parseInt($('colorAmount').value, 10) : 100,
     darkBg: $('darkBg').checked
   };
 }
@@ -534,7 +550,7 @@ function convert() {
   state.lastText = text;
   state.lastMode = s.mode;
   var out = $('output');
-  state.lastColors = s.color ? buildColorRows(img, text) : null;
+  state.lastColors = s.color ? buildColorRows(img, text, s.colorMode, s.tint, s.colorAmount) : null;
   if (state.lastColors) out.innerHTML = colorHtml(text, state.lastColors);
   else out.textContent = text;
   out.style.lineHeight = (s.mode === 'braille' ? 1.05 : 1.0);
@@ -1005,7 +1021,7 @@ function bindDrop() {
 function bindControls() {
   var ids = [
     'mode', 'width', 'invert', 'threshold', 'contrast',
-    'brightness', 'dither', 'fontSize', 'darkBg', 'color'
+    'brightness', 'dither', 'fontSize', 'darkBg', 'color', 'tint', 'colorAmount'
   ];
   ids.forEach(function (id) {
     var el = $(id);
@@ -1073,25 +1089,50 @@ function bindControls() {
 
   $('mode').addEventListener('change', updateThresholdVisibility);
   if ($('color')) {
-    try { $('color').checked = localStorage.getItem('am.color.v1') === '1'; } catch (e) {}
+    // Output color: mono | tint | color. #color (hidden) = "not mono", its data-mode = which.
+    var cbx = $('color'), tintEl = $('tint'), amtEl = $('colorAmount');
     var segBtns = document.querySelectorAll('.seg-btn');
+    var cmode = 'mono';
+    try {
+      cmode = localStorage.getItem('am.colormode.v1') || (localStorage.getItem('am.color.v1') === '1' ? 'color' : 'mono');
+      if (tintEl && localStorage.getItem('am.tint.v1')) tintEl.value = localStorage.getItem('am.tint.v1');
+      if (amtEl && localStorage.getItem('am.amount.v1') != null) amtEl.value = localStorage.getItem('am.amount.v1');
+    } catch (e) {}
+    if (['mono', 'tint', 'color'].indexOf(cmode) < 0) cmode = 'mono';
     var syncSeg = function () {
+      cbx.checked = cmode !== 'mono';
+      cbx.dataset.mode = cmode;
       Array.prototype.forEach.call(segBtns, function (b) {
-        b.setAttribute('aria-pressed', (b.dataset.color === '1') === $('color').checked ? 'true' : 'false');
+        b.setAttribute('aria-pressed', b.dataset.cm === cmode ? 'true' : 'false');
       });
+      if ($('tintRow')) $('tintRow').hidden = cmode !== 'tint';
+      if ($('amountRow')) $('amountRow').hidden = cmode === 'mono';
+      Array.prototype.forEach.call(document.querySelectorAll('.swatch'), function (w) {
+        w.setAttribute('aria-pressed', tintEl && w.dataset.tint.toLowerCase() === tintEl.value.toLowerCase() ? 'true' : 'false');
+      });
+      if ($('amountVal') && amtEl) $('amountVal').textContent = amtEl.value + '%';
     };
-    $('color').addEventListener('change', function () {
-      try { localStorage.setItem('am.color.v1', $('color').checked ? '1' : '0'); } catch (e) {}
-      syncSeg();
-    });
+    var saveColor = function () {
+      try {
+        localStorage.setItem('am.colormode.v1', cmode);
+        localStorage.setItem('am.color.v1', cmode === 'color' ? '1' : '0');
+        if (tintEl) localStorage.setItem('am.tint.v1', tintEl.value);
+        if (amtEl) localStorage.setItem('am.amount.v1', amtEl.value);
+      } catch (e) {}
+    };
     Array.prototype.forEach.call(segBtns, function (b) {
       b.addEventListener('click', function () {
-        var on = b.dataset.color === '1';
-        if ($('color').checked === on) return;
-        $('color').checked = on;
-        $('color').dispatchEvent(new Event('change'));
+        if (cmode === b.dataset.cm) return;
+        cmode = b.dataset.cm; syncSeg(); saveColor(); scheduleConvert();
       });
     });
+    Array.prototype.forEach.call(document.querySelectorAll('.swatch'), function (w) {
+      w.addEventListener('click', function () {
+        tintEl.value = w.dataset.tint; syncSeg(); saveColor(); scheduleConvert();
+      });
+    });
+    if (tintEl) tintEl.addEventListener('input', function () { syncSeg(); saveColor(); });
+    if (amtEl) amtEl.addEventListener('input', function () { syncSeg(); saveColor(); });
     syncSeg();
   }
   (function () {

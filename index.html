@@ -105,9 +105,26 @@
         </div>
         <div class="seg" role="group" aria-label="Output color">
           <input type="checkbox" id="color" hidden />
-          <button type="button" class="seg-btn" data-color="0" aria-pressed="true">Mono</button>
-          <button type="button" class="seg-btn" data-color="1" aria-pressed="false">Color</button>
+          <button type="button" class="seg-btn" data-cm="mono" aria-pressed="true">Mono</button>
+          <button type="button" class="seg-btn" data-cm="tint" aria-pressed="false">Tint</button>
+          <button type="button" class="seg-btn" data-cm="color" aria-pressed="false">Color</button>
         </div>
+        <div class="field tint-row" id="tintRow" hidden>
+          <span class="field-label">Tint</span>
+          <div class="swatches" role="group" aria-label="Tint color">
+            <button type="button" class="swatch" data-tint="#00ff41" style="--sw:#00ff41" aria-label="Matrix green" title="Matrix green"></button>
+            <button type="button" class="swatch" data-tint="#ffb000" style="--sw:#ffb000" aria-label="Amber" title="Amber"></button>
+            <button type="button" class="swatch" data-tint="#00e5ff" style="--sw:#00e5ff" aria-label="Cyan" title="Cyan"></button>
+            <button type="button" class="swatch" data-tint="#ff2bd6" style="--sw:#ff2bd6" aria-label="Magenta" title="Magenta"></button>
+            <button type="button" class="swatch" data-tint="#ff3030" style="--sw:#ff3030" aria-label="Red" title="Red"></button>
+            <button type="button" class="swatch" data-tint="#ffffff" style="--sw:#ffffff" aria-label="White" title="White"></button>
+            <input type="color" id="tint" value="#00ff41" aria-label="Pick tint color" class="tint-pick" />
+          </div>
+        </div>
+        <label class="field" id="amountRow" hidden>
+          <span class="field-label">Color amount <em id="amountVal">100%</em></span>
+          <input type="range" id="colorAmount" min="0" max="100" value="100" step="1" />
+        </label>
         <p id="ditherHint" class="hint">Dither before threshold (Braille / half-blocks)</p>
         <p class="hint">Fit keeps the full art on screen. Width still sets resolution — PNG/.txt export stay full size.</p>
 
