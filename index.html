@@ -129,7 +129,7 @@
           <label class="check zalgo-check"><input type="checkbox" id="zalgo" /> Zalgo</label>
           <button type="button" id="zInfoBtn" class="zinfo-btn" aria-expanded="false" aria-controls="zInfo" aria-label="What is Zalgo?">?</button>
         </div>
-        <p id="zInfo" class="hint" hidden>Zalgo: glitchy 'cursed' text from a 2004 internet meme, made by stacking Unicode combining marks on each character.</p>
+        <p id="zInfo" class="hint" hidden>Zalgo: glitchy 'cursed' text from a 2004 internet meme, made by stacking Unicode combining marks on each character. Works in every mode; Copy, .txt and PNG keep the marks.</p>
         <div class="field" id="zalgoOpts" hidden>
           <label class="field"><span class="field-label">Zalgo amount <em id="zalgoAmtVal">3</em></span>
             <input type="range" id="zalgoAmt" min="1" max="15" value="3" step="1" /></label>
@@ -138,10 +138,12 @@
             <button type="button" class="seg-btn zdir" id="zMid" aria-pressed="false">Mid</button>
             <button type="button" class="seg-btn zdir" id="zDown" aria-pressed="true">Down</button>
           </div>
-          <p class="hint">Glitch marks stack on every mode, Braille too. Copy, .txt and PNG keep them.</p>
         </div>
-        <p id="ditherHint" class="hint">Dither before threshold (Braille / half-blocks)</p>
-        <p class="hint">Fit keeps the full art on screen. Width still sets resolution — PNG/.txt export stay full size.</p>
+        <details class="tips">
+          <summary>Tips</summary>
+          <p id="ditherHint" class="hint">Dither before threshold (Braille / half-blocks)</p>
+          <p class="hint">Fit keeps the full art on screen. Width still sets resolution — PNG/.txt export stay full size.</p>
+        </details>
 
         <p id="status" class="status" role="status"></p>
         <p id="meta" class="meta"></p>

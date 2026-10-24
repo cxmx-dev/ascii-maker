@@ -463,6 +463,25 @@ html.input-touch .check input { width: 22px; height: 22px; }
 .tint-pick { width: 44px; height: 44px; padding: 2px; border: 2px solid rgba(127, 127, 127, 0.4); border-radius: 10px; background: transparent; cursor: pointer; }
 .field[hidden] { display: none; }
 .controls > * { flex-shrink: 0; }
+/* Desktop: panel fills its grid cell and scrolls inside it, all the way to the last line */
+@media (min-width: 701px) {
+  .app { height: 100vh; height: 100dvh; }
+  .layout { grid-template-rows: minmax(0, 1fr); }
+  .controls { height: auto; min-height: 0; max-height: none; gap: 8px; padding: 12px 12px 24px; scroll-padding-bottom: 24px; }
+  .controls .field { gap: 2px; }
+  .controls .seg { margin: 2px 0; }
+  html.input-fine .controls .check { min-height: 30px; }
+  html.input-fine .controls input[type="range"] { min-height: 22px; }
+  html.input-fine .controls .seg-btn { min-height: 36px; }
+  html.input-fine .controls .zinfo-btn { width: 32px; height: 32px; flex-basis: 32px; margin-top: 0; }
+  html.input-fine .controls .zalgo-check { min-height: 32px; margin-top: 0; }
+  html.input-fine .controls .swatch, html.input-fine .controls .tint-pick { width: 34px; height: 34px; }
+  .controls .local-note { margin: 0 2px; }
+}
+.tips { font-size: 0.75rem; color: var(--muted); }
+.tips summary { cursor: pointer; min-height: 30px; display: flex; align-items: center; font-weight: 600; }
+html.input-touch .tips summary { min-height: 44px; }
+.tips .hint { margin-top: 4px; }
 .zc { position: relative; }
 .zc i { position: absolute; left: 0; top: 0; width: 0; font-style: normal; font-family: "Cascadia Code", Consolas, ui-monospace, monospace; pointer-events: none; }
 .zrow { display: flex; align-items: center; gap: 10px; }
