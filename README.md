@@ -101,3 +101,5 @@ README.md
 .gitignore
 .nojekyll
 ```
+
+Thanks to efeX for contributing feature ideas.
