@@ -1148,6 +1148,9 @@ function bindControls() {
   });
 
   $('mode').addEventListener('change', updateThresholdVisibility);
+  if ($('zInfoBtn')) $('zInfoBtn').addEventListener('click', function () {
+    var o = $('zInfo').hidden; $('zInfo').hidden = !o; this.setAttribute('aria-expanded', o ? 'true' : 'false');
+  });
   if ($('zalgo')) (function () {
     var zb = document.querySelectorAll('.zdir');
     var sync = function () {

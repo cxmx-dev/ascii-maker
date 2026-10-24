@@ -125,7 +125,11 @@
           <span class="field-label">Color amount <em id="amountVal">100%</em></span>
           <input type="range" id="colorAmount" min="0" max="100" value="100" step="1" />
         </label>
-        <label class="check zalgo-check"><input type="checkbox" id="zalgo" /> Zalgo</label>
+        <div class="zrow">
+          <label class="check zalgo-check"><input type="checkbox" id="zalgo" /> Zalgo</label>
+          <button type="button" id="zInfoBtn" class="zinfo-btn" aria-expanded="false" aria-controls="zInfo" aria-label="What is Zalgo?">?</button>
+        </div>
+        <p id="zInfo" class="hint" hidden>Zalgo: glitchy 'cursed' text from a 2004 internet meme, made by stacking Unicode combining marks on each character.</p>
         <div class="field" id="zalgoOpts" hidden>
           <label class="field"><span class="field-label">Zalgo amount <em id="zalgoAmtVal">3</em></span>
             <input type="range" id="zalgoAmt" min="1" max="15" value="3" step="1" /></label>
