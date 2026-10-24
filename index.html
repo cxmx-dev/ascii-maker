@@ -42,6 +42,7 @@
             <option value="blocks_dense">Blocks dense ▁…█</option>
             <option value="ascii">ASCII simple</option>
             <option value="ascii_dense">ASCII dense</option>
+            <option value="custom">Custom characters</option>
           </select>
         </label>
 
@@ -50,8 +51,28 @@
           <input type="range" id="width" min="16" max="200" value="60" step="1" />
         </label>
 
+        <div class="field charset-row" id="charsetRow" hidden>
+          <label class="field-label" for="charset">Characters <em>dark &rarr; light</em></label>
+          <select id="charsetPreset" aria-label="Character preset">
+            <option value="standard">Standard</option>
+            <option value="detailed">Detailed (70)</option>
+            <option value="blocks">Blocks</option>
+            <option value="letters">Letters</option>
+            <option value="digits">Digits</option>
+            <option value="custom">Custom</option>
+          </select>
+          <input type="text" id="charset" class="charset-input" maxlength="128" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="@%#*+=-:. " />
+          <div class="charset-sets" role="group" aria-label="Add or remove character sets">
+            <button type="button" class="btn charset-set" data-set="lower" aria-pressed="false">a-z</button>
+            <button type="button" class="btn charset-set" data-set="upper" aria-pressed="false">A-Z</button>
+            <button type="button" class="btn charset-set" data-set="digits" aria-pressed="false">0-9</button>
+            <button type="button" class="btn charset-set" data-set="symbols" aria-pressed="false">!@#</button>
+          </div>
+          <p class="hint">Type your own characters, darkest first, or tap a set to add/remove it (auto-sorted by darkness). Add a space at the end for blank areas.</p>
+        </div>
+
         <label class="field" id="thresholdRow">
-          <span class="field-label">Threshold <em id="thresholdVal">128</em></span>
+          <span class="field-label"><span id="thresholdLabel">Threshold</span> <em id="thresholdVal">128</em></span>
           <input type="range" id="threshold" min="1" max="254" value="128" step="1" />
         </label>
 

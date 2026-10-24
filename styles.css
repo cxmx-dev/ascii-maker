@@ -423,3 +423,20 @@ html.input-fine .btn {
 html.input-fine select {
   min-height: 36px;
 }
+
+.charset-row select { margin-bottom: 6px; }
+.charset-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 8px 10px;
+  font: 16px/1.2 ui-monospace, Consolas, "Courier New", monospace;
+  color: inherit;
+  background: rgba(127, 127, 127, 0.12);
+  border: 1px solid rgba(127, 127, 127, 0.4);
+  border-radius: 8px;
+}
+html.input-touch .charset-input { min-height: 44px; }
+.charset-sets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.charset-set { min-width: 44px; min-height: 44px; flex: 1 1 44px; font-family: ui-monospace, Consolas, monospace; }
+.charset-set[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: -2px; font-weight: 700; }

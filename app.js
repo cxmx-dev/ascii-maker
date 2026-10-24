@@ -26,6 +26,68 @@ var BRAILLE_BITS = [0x01, 0x02, 0x04, 0x40, 0x08, 0x10, 0x20, 0x80];
 var RAMP_BLOCKS = '  ░▒▓█';
 var RAMP_BLOCKS_DENSE = ' ▁▂▃▄▅▆▇█';
 var RAMP_ASCII = ' .:-=+*#%@';
+// Custom charset presets, typed dense/dark -> light
+var CHARSET_PRESETS = {
+  standard: '@%#*+=-:. ',
+  detailed: '$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,"^`\'. ',
+  blocks: '\u2588\u2593\u2592\u2591 ',
+  letters: 'MWNBQHDRKAEGOPSUXZVYTCJFLIabdghkpqmnoeuwsxzcvrtfjil ',
+  digits: '8069452317 '
+};
+var CHARSET_KEY = 'am.charset.v1';
+function customRamp() {
+  var el = document.getElementById('charset');
+  var v = el ? el.value.replace(/[\r\n\t]/g, '') : '';
+  var seen = {}, out = '';
+  Array.from(v).forEach(function (c) { if (!seen[c]) { seen[c] = 1; out += c; } });
+  if (!out) out = CHARSET_PRESETS.standard;
+  if (out.length === 1) out += ' ';
+  // input is dark -> light; toRamp wants light -> dense
+  return Array.from(out).reverse().join('');
+}
+var CHARSET_SETS = {
+  lower: 'abcdefghijklmnopqrstuvwxyz',
+  upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  digits: '0123456789',
+  symbols: '!@#$%^&*()-_=+[]{};:\'",.<>/?\\|`~'
+};
+var glyphInk = {};
+function inkOf(c) {
+  if (c === ' ') return 0;
+  if (glyphInk[c] != null) return glyphInk[c];
+  var cv = inkOf.cv || (inkOf.cv = document.createElement('canvas'));
+  cv.width = 24; cv.height = 32;
+  var x = cv.getContext('2d', { willReadFrequently: true });
+  x.clearRect(0, 0, 24, 32);
+  x.fillStyle = '#000'; x.textBaseline = 'top';
+  x.font = '24px ui-monospace, Consolas, "Courier New", monospace';
+  x.fillText(c, 2, 2);
+  var p = x.getImageData(0, 0, 24, 32).data, s = 0;
+  for (var i = 3; i < p.length; i += 4) s += p[i];
+  return (glyphInk[c] = s);
+}
+function sortByDensity(str) {
+  var u = [], seen = {};
+  Array.from(str).forEach(function (c) { if (!seen[c]) { seen[c] = 1; u.push(c); } });
+  var sp = seen[' '];
+  u = u.filter(function (c) { return c !== ' '; });
+  u.sort(function (p, q) { return inkOf(q) - inkOf(p); });
+  return u.join('') + (sp ? ' ' : '');
+}
+function toggleSet(cur, set) {
+  var chars = Array.from(set);
+  var all = chars.every(function (c) { return cur.indexOf(c) >= 0; });
+  var out = all ? Array.from(cur).filter(function (c) { return set.indexOf(c) < 0; }).join('') : cur + set;
+  if (out.indexOf(' ') < 0) out += ' ';
+  return sortByDensity(out);
+}
+function shiftGrid(grid, t) {
+  // Threshold as midpoint shift for ramp modes: 128 = neutral
+  var d = 128 - t;
+  if (!d) return grid;
+  for (var i = 0; i < grid.length; i++) grid[i] = Math.max(0, Math.min(255, grid[i] + d));
+  return grid;
+}
 var RAMP_ASCII_DENSE = ' .\'`^",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$';
 
 // Half-block glyphs for 2×2 cells (bitmask topL, topR, botL, botR)
@@ -124,7 +186,7 @@ function ditherBuffer(buf, w, h) {
   }
 }
 
-function buildGrayGrid(imgData, srcW, srcH, outW, outH, contrast, brightness, dither) {
+function buildGrayGrid(imgData, srcW, srcH, outW, outH, contrast, brightness, dither, preShift) {
   var data = imgData.data;
   var grid = new Float32Array(outW * outH);
   var x, y, sx, sy;
@@ -135,6 +197,8 @@ function buildGrayGrid(imgData, srcW, srcH, outW, outH, contrast, brightness, di
       grid[y * outW + x] = sampleGray(data, srcW, srcH, sx, sy, contrast, brightness);
     }
   }
+  // Dither makes pixels pure black/white, so apply threshold as a midpoint shift first
+  if (dither && preShift != null) shiftGrid(grid, preShift);
   if (dither) ditherBuffer(grid, outW, outH);
   return grid;
 }
@@ -353,7 +417,7 @@ function convert() {
   var useDither = s.dither;
   var grid = buildGrayGrid(
     imgData, gridW, gridH, gridW, gridH,
-    s.contrast, s.brightness, useDither && (s.mode === 'braille' || s.mode === 'half')
+    s.contrast, s.brightness, useDither && (s.mode === 'braille' || s.mode === 'half'), s.threshold
   );
 
   var text;
@@ -367,28 +431,34 @@ function convert() {
     case 'blocks':
       if (useDither) {
         var g1 = buildGrayGrid(imgData, gridW, gridH, charCols, charRows, s.contrast, s.brightness, true);
-        text = toRamp(g1, charCols, charRows, RAMP_BLOCKS, s.invert);
+        text = toRamp(shiftGrid(g1, s.threshold), charCols, charRows, RAMP_BLOCKS, s.invert);
       } else {
         var g2 = buildGrayGrid(imgData, gridW, gridH, charCols, charRows, s.contrast, s.brightness, false);
-        text = toRamp(g2, charCols, charRows, RAMP_BLOCKS, s.invert);
+        text = toRamp(shiftGrid(g2, s.threshold), charCols, charRows, RAMP_BLOCKS, s.invert);
       }
       break;
     case 'blocks_dense':
       {
         var gd = buildGrayGrid(imgData, gridW, gridH, charCols, charRows, s.contrast, s.brightness, useDither);
-        text = toRamp(gd, charCols, charRows, RAMP_BLOCKS_DENSE, s.invert);
+        text = toRamp(shiftGrid(gd, s.threshold), charCols, charRows, RAMP_BLOCKS_DENSE, s.invert);
       }
       break;
     case 'ascii':
       {
         var ga = buildGrayGrid(imgData, gridW, gridH, charCols, charRows, s.contrast, s.brightness, useDither);
-        text = toRamp(ga, charCols, charRows, RAMP_ASCII, s.invert);
+        text = toRamp(shiftGrid(ga, s.threshold), charCols, charRows, RAMP_ASCII, s.invert);
       }
       break;
     case 'ascii_dense':
       {
         var gad = buildGrayGrid(imgData, gridW, gridH, charCols, charRows, s.contrast, s.brightness, useDither);
-        text = toRamp(gad, charCols, charRows, RAMP_ASCII_DENSE, s.invert);
+        text = toRamp(shiftGrid(gad, s.threshold), charCols, charRows, RAMP_ASCII_DENSE, s.invert);
+      }
+      break;
+    case 'custom':
+      {
+        var gc = buildGrayGrid(imgData, gridW, gridH, charCols, charRows, s.contrast, s.brightness, useDither);
+        text = toRamp(shiftGrid(gc, s.threshold), charCols, charRows, customRamp(), s.invert);
       }
       break;
     default:
@@ -502,7 +572,10 @@ function updateMeta() {
 function updateThresholdVisibility() {
   var mode = $('mode').value;
   var need = mode === 'braille' || mode === 'half';
-  $('thresholdRow').hidden = !need;
+  $('thresholdRow').hidden = false;
+  var tl = $('thresholdLabel');
+  if (tl) tl.textContent = need ? 'Threshold' : 'Threshold (midtone)';
+  if ($('charsetRow')) $('charsetRow').hidden = mode !== 'custom';
   $('ditherHint').textContent = need
     ? 'Dither before threshold (Braille / half-blocks)'
     : 'Dither on gray ramp';
@@ -919,6 +992,37 @@ function bindControls() {
   });
 
   $('mode').addEventListener('change', updateThresholdVisibility);
+  (function () {
+    var cs = $('charset'), pr = $('charsetPreset');
+    if (!cs || !pr) return;
+    try {
+      var sv = JSON.parse(localStorage.getItem(CHARSET_KEY) || 'null');
+      if (sv) { pr.value = sv.preset || 'standard'; cs.value = sv.chars != null ? sv.chars : CHARSET_PRESETS.standard; }
+      else cs.value = CHARSET_PRESETS.standard;
+    } catch (e) { cs.value = CHARSET_PRESETS.standard; }
+    function save() { try { localStorage.setItem(CHARSET_KEY, JSON.stringify({ preset: pr.value, chars: cs.value })); } catch (e) {} }
+    pr.addEventListener('change', function () {
+      if (CHARSET_PRESETS[pr.value] != null) cs.value = CHARSET_PRESETS[pr.value];
+      save(); scheduleConvert();
+    });
+    cs.addEventListener('input', function () { pr.value = 'custom'; save(); syncSetBtns(); scheduleConvert(); });
+    var btns = document.querySelectorAll('.charset-set');
+    function syncSetBtns() {
+      Array.prototype.forEach.call(btns, function (b) {
+        var set = CHARSET_SETS[b.dataset.set];
+        var on = Array.from(set).every(function (c) { return cs.value.indexOf(c) >= 0; });
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+    Array.prototype.forEach.call(btns, function (b) {
+      b.addEventListener('click', function () {
+        cs.value = toggleSet(cs.value, CHARSET_SETS[b.dataset.set]);
+        pr.value = 'custom'; save(); syncSetBtns(); scheduleConvert();
+      });
+    });
+    pr.addEventListener('change', syncSetBtns);
+    syncSetBtns();
+  })();
 
   window.addEventListener('resize', scheduleFit);
   if (window.visualViewport) {
