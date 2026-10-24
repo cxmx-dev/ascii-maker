@@ -131,15 +131,65 @@ function buildColorRows(img, text, cm, tint, amount) {
   }
   return out;
 }
+// Zalgo: combining marks (U+0300-036F) stacked on output chars. Seeded so re-renders stay stable.
+var ZALGO_KEY = 'am.zalgo.v1';
+function zr(a, b) { var s = ''; for (var i = a; i <= b; i++) s += String.fromCharCode(i); return s; }
+var Z_UP = zr(0x300, 0x315) + zr(0x33d, 0x344) + '\u0346\u034a\u034b\u034c\u0350\u0351\u0352\u0357\u035b' + zr(0x363, 0x36f);
+var Z_MID = zr(0x334, 0x338);
+var Z_DN = zr(0x316, 0x319) + zr(0x31c, 0x333) + zr(0x339, 0x33c) + '\u0345\u0347\u0348\u0349\u034d\u034e\u0353\u0354\u0355\u0356\u0359\u035a';
+function zRng(s) { s >>>= 0; return function () { s = (s + 0x6d2b79f5) >>> 0; var t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+// Only stack on glyphs the mono font itself has; fallback-font glyphs (Braille, rare blocks) show tofu.
+function zOk(k) { return k > 32 && (k < 0x2500 || k === 0x2588 || k === 0x2591 || k === 0x2592 || k === 0x2593 || k === 0x2580 || k === 0x2584); }
+/** Per-cell mark strings (rows x cols) or null when off. Blanks stay clean. */
+function zalgoMarks(text, z) {
+  if (!z || !z.on) return null;
+  var pool = (z.up ? Z_UP : '') + (z.mid ? Z_MID : '') + (z.down ? Z_DN : '');
+  if (!pool) return null;
+  var rnd = zRng(1337), n = z.amt, lines = text.split('\n'), out = [], r, c, k, m;
+  for (r = 0; r < lines.length; r++) {
+    var row = [];
+    for (c = 0; c < lines[r].length; c++) {
+      m = '';
+      if (zOk(lines[r].charCodeAt(c))) {
+        var cnt = Math.max(1, Math.round(n * (0.5 + rnd())));
+        for (k = 0; k < cnt; k++) m += pool.charAt((rnd() * pool.length) | 0);
+      }
+      row.push(m);
+    }
+    out.push(row);
+  }
+  return out;
+}
+function zJoin(line, rm, a, b) {
+  if (!rm) return line.slice(a, b);
+  var s = '', i;
+  for (i = a; i < b; i++) s += line.charAt(i) + (rm[i] || '');
+  return s;
+}
+/** Text for copy/.txt: base art with Zalgo marks merged in. */
+function outText() {
+  var zm = state.zMarks;
+  if (!zm || !state.lastText) return state.lastText;
+  return state.lastText.split('\n').map(function (l, r) { return zJoin(l, zm[r], 0, l.length); }).join('\n');
+}
+function getZalgo() {
+  return {
+    on: !!($('zalgo') && $('zalgo').checked),
+    amt: $('zalgoAmt') ? parseInt($('zalgoAmt').value, 10) || 3 : 3,
+    up: !$('zUp') || $('zUp').getAttribute('aria-pressed') === 'true',
+    mid: !!$('zMid') && $('zMid').getAttribute('aria-pressed') === 'true',
+    down: !$('zDown') || $('zDown').getAttribute('aria-pressed') === 'true'
+  };
+}
 function escHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 function isBlankChar(ch) { return ch === ' ' || ch === '\u2800'; }
 /** One span per run of same color; blanks join the current run (they draw nothing). */
-function colorHtml(text, colors) {
+function colorHtml(text, colors, zm) {
   var lines = text.split('\n'), html = [], r, c;
   for (r = 0; r < lines.length; r++) {
-    var line = lines[r], row = colors[r] || [], cur = null, buf = '', parts = [];
+    var line = lines[r], row = colors[r] || [], rm = zm && zm[r], cur = null, buf = '', parts = [];
     for (c = 0; c < line.length; c++) {
       var ch = line.charAt(c);
       var col = isBlankChar(ch) ? cur : row[c];
@@ -147,7 +197,7 @@ function colorHtml(text, colors) {
         parts.push(cur ? '<span style="color:' + cur + '">' + escHtml(buf) + '</span>' : escHtml(buf));
         buf = '';
       }
-      cur = col; buf += ch;
+      cur = col; buf += ch + (rm && rm[c] || '');
     }
     if (buf) parts.push(cur ? '<span style="color:' + cur + '">' + escHtml(buf) + '</span>' : escHtml(buf));
     html.push(parts.join(''));
@@ -551,8 +601,9 @@ function convert() {
   state.lastMode = s.mode;
   var out = $('output');
   state.lastColors = s.color ? buildColorRows(img, text, s.colorMode, s.tint, s.colorAmount) : null;
-  if (state.lastColors) out.innerHTML = colorHtml(text, state.lastColors);
-  else out.textContent = text;
+  state.zMarks = zalgoMarks(text, getZalgo());
+  if (state.lastColors) out.innerHTML = colorHtml(text, state.lastColors, state.zMarks);
+  else out.textContent = outText();
   out.style.lineHeight = (s.mode === 'braille' ? 1.05 : 1.0);
   // Fit mode uses a fixed measure size then scales; free mode uses slider
   if (s.fitView) {
@@ -701,8 +752,8 @@ function copyOutput() {
     return;
   }
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(state.lastText).then(function () {
-      setStatus('Copied ' + state.lastText.length + ' characters');
+    navigator.clipboard.writeText(outText()).then(function () {
+      setStatus('Copied ' + outText().length + ' characters');
       flashBtn($('btnCopy'));
     }).catch(function () {
       fallbackCopy();
@@ -714,7 +765,7 @@ function copyOutput() {
 
 function fallbackCopy() {
   var ta = document.createElement('textarea');
-  ta.value = state.lastText;
+  ta.value = outText();
   ta.setAttribute('readonly', '');
   ta.style.position = 'fixed';
   ta.style.left = '-9999px';
@@ -736,7 +787,7 @@ function downloadTxt() {
     return;
   }
   var base = (state.imageName || 'ascii').replace(/\.[^.]+$/, '');
-  var blob = new Blob([state.lastText], { type: 'text/plain;charset=utf-8' });
+  var blob = new Blob([outText()], { type: 'text/plain;charset=utf-8' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = base + '-' + $('mode').value + '.txt';
@@ -801,7 +852,7 @@ function downloadPng() {
   // Defer so status paints, then build (heavy)
   setTimeout(function () {
     try {
-      var result = rasterizeArtToCanvas(lines, cols, rows, wantPx, isBraille, s.darkBg, state.lastColors);
+      var result = rasterizeArtToCanvas(lines, cols, rows, wantPx, isBraille, s.darkBg, state.lastColors, state.zMarks);
       if (!result || !result.canvas) {
         setStatus('PNG failed: canvas too large — lower Width or PNG export size', true);
         return;
@@ -854,7 +905,7 @@ function downloadPng() {
  * Build a canvas of the art. Shrinks font/scale until within browser limits.
  * @returns {{ canvas: HTMLCanvasElement, note: string } | null}
  */
-function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg, colors) {
+function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg, colors, zm) {
   var attempts = [
     fontPxWant,
     Math.max(4, Math.floor(fontPxWant * 0.75)),
@@ -938,7 +989,7 @@ function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg, 
       // Slight letter-spacing fix: draw per line
       var i;
       for (i = 0; i < rows; i++) {
-        if (!colors) { ctx.fillText(lines[i], pad, pad + i * lineH); continue; }
+        if (!colors) { ctx.fillText(zJoin(lines[i], zm && zm[i], 0, lines[i].length), pad, pad + i * lineH); continue; }
         // Color: draw runs of same color at their cell offset
         var ln = lines[i], crow = colors[i] || [], j = 0;
         while (j < ln.length) {
@@ -946,7 +997,7 @@ function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg, 
           var k2 = j + 1;
           while (k2 < ln.length && (isBlankChar(ln.charAt(k2)) || crow[k2] === crow[j])) k2++;
           ctx.fillStyle = crow[j] || ctx.fillStyle;
-          ctx.fillText(ln.slice(j, k2), pad + j * cellW, pad + i * lineH);
+          ctx.fillText(zJoin(ln, zm && zm[i], j, k2), pad + j * cellW, pad + i * lineH);
           j = k2;
         }
       }
@@ -1021,7 +1072,7 @@ function bindDrop() {
 function bindControls() {
   var ids = [
     'mode', 'width', 'invert', 'threshold', 'contrast',
-    'brightness', 'dither', 'fontSize', 'darkBg', 'color', 'tint', 'colorAmount'
+    'brightness', 'dither', 'fontSize', 'darkBg', 'color', 'tint', 'colorAmount', 'zalgo', 'zalgoAmt'
   ];
   ids.forEach(function (id) {
     var el = $(id);
@@ -1088,10 +1139,38 @@ function bindControls() {
   });
 
   $('mode').addEventListener('change', updateThresholdVisibility);
+  if ($('zalgo')) (function () {
+    var zb = document.querySelectorAll('.zdir');
+    var sync = function () {
+      var z = getZalgo();
+      $('zalgoOpts').hidden = !z.on;
+      $('zalgoAmtVal').textContent = z.amt;
+    };
+    var save = function () { try { localStorage.setItem(ZALGO_KEY, JSON.stringify(getZalgo())); } catch (e) {} };
+    try {
+      var sv = JSON.parse(localStorage.getItem(ZALGO_KEY) || 'null');
+      if (sv) {
+        $('zalgo').checked = !!sv.on;
+        if (sv.amt) $('zalgoAmt').value = sv.amt;
+        $('zUp').setAttribute('aria-pressed', sv.up ? 'true' : 'false');
+        $('zMid').setAttribute('aria-pressed', sv.mid ? 'true' : 'false');
+        $('zDown').setAttribute('aria-pressed', sv.down ? 'true' : 'false');
+      }
+    } catch (e) {}
+    Array.prototype.forEach.call(zb, function (b) {
+      b.addEventListener('click', function () {
+        b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+        save(); scheduleConvert();
+      });
+    });
+    $('zalgo').addEventListener('change', function () { sync(); save(); });
+    $('zalgoAmt').addEventListener('input', function () { sync(); save(); });
+    sync();
+  })();
   if ($('color')) {
     // Output color: mono | tint | color. #color (hidden) = "not mono", its data-mode = which.
     var cbx = $('color'), tintEl = $('tint'), amtEl = $('colorAmount');
-    var segBtns = document.querySelectorAll('.seg-btn');
+    var segBtns = document.querySelectorAll('.seg-btn[data-cm]');
     var cmode = 'mono';
     try {
       cmode = localStorage.getItem('am.colormode.v1') || (localStorage.getItem('am.color.v1') === '1' ? 'color' : 'mono');

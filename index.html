@@ -125,6 +125,17 @@
           <span class="field-label">Color amount <em id="amountVal">100%</em></span>
           <input type="range" id="colorAmount" min="0" max="100" value="100" step="1" />
         </label>
+        <label class="check zalgo-check"><input type="checkbox" id="zalgo" /> Zalgo</label>
+        <div class="field" id="zalgoOpts" hidden>
+          <label class="field"><span class="field-label">Zalgo amount <em id="zalgoAmtVal">3</em></span>
+            <input type="range" id="zalgoAmt" min="1" max="15" value="3" step="1" /></label>
+          <div class="seg" role="group" aria-label="Zalgo direction">
+            <button type="button" class="seg-btn zdir" id="zUp" aria-pressed="true">Up</button>
+            <button type="button" class="seg-btn zdir" id="zMid" aria-pressed="false">Mid</button>
+            <button type="button" class="seg-btn zdir" id="zDown" aria-pressed="true">Down</button>
+          </div>
+          <p class="hint">Glitch marks stack on text and block chars (not Braille). Copy, .txt and PNG keep them.</p>
+        </div>
         <p id="ditherHint" class="hint">Dither before threshold (Braille / half-blocks)</p>
         <p class="hint">Fit keeps the full art on screen. Width still sets resolution — PNG/.txt export stay full size.</p>
 
