@@ -103,6 +103,11 @@
           <label class="check"><input type="checkbox" id="dither" checked /> Dither</label>
           <label class="check"><input type="checkbox" id="darkBg" checked /> Dark bg</label>
         </div>
+        <div class="seg" role="group" aria-label="Output color">
+          <input type="checkbox" id="color" hidden />
+          <button type="button" class="seg-btn" data-color="0" aria-pressed="true">Mono</button>
+          <button type="button" class="seg-btn" data-color="1" aria-pressed="false">Color</button>
+        </div>
         <p id="ditherHint" class="hint">Dither before threshold (Braille / half-blocks)</p>
         <p class="hint">Fit keeps the full art on screen. Width still sets resolution — PNG/.txt export stay full size.</p>
 

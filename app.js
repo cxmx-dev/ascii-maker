@@ -81,6 +81,66 @@ function toggleSet(cur, set) {
   if (out.indexOf(' ') < 0) out += ' ';
   return sortByDensity(out);
 }
+/** Average color per character: draw the image at cols x rows (browser box-filters it). */
+var colorCanvas = null;
+function buildColorRows(img, text) {
+  var lines = text.split('\n');
+  var rows = lines.length, cols = 0, i;
+  for (i = 0; i < rows; i++) if (lines[i].length > cols) cols = lines[i].length;
+  if (!cols || !rows) return null;
+  // Downscale in steps of 2 so the browser averages blocks instead of point-sampling
+  var src = img, w = img.width, h = img.height;
+  colorCanvas = colorCanvas || document.createElement('canvas');
+  while (w / 2 > cols && h / 2 > rows) {
+    var t = document.createElement('canvas');
+    w = Math.ceil(w / 2); h = Math.ceil(h / 2);
+    t.width = w; t.height = h;
+    var tc = t.getContext('2d');
+    tc.imageSmoothingQuality = 'high';
+    tc.drawImage(src, 0, 0, w, h);
+    src = t;
+  }
+  colorCanvas.width = cols; colorCanvas.height = rows;
+  var cx = colorCanvas.getContext('2d', { willReadFrequently: true });
+  cx.imageSmoothingQuality = 'high';
+  cx.clearRect(0, 0, cols, rows);
+  cx.drawImage(src, 0, 0, cols, rows);
+  var px = cx.getImageData(0, 0, cols, rows).data;
+  var hex = '0123456789abcdef', out = [], r, c, k;
+  for (r = 0; r < rows; r++) {
+    var row = new Array(cols);
+    for (c = 0; c < cols; c++) {
+      k = (r * cols + c) * 4;
+      // 12-bit color (#rgb) so neighbouring chars share runs
+      row[c] = '#' + hex[px[k] >> 4] + hex[px[k + 1] >> 4] + hex[px[k + 2] >> 4];
+    }
+    out.push(row);
+  }
+  return out;
+}
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function isBlankChar(ch) { return ch === ' ' || ch === '\u2800'; }
+/** One span per run of same color; blanks join the current run (they draw nothing). */
+function colorHtml(text, colors) {
+  var lines = text.split('\n'), html = [], r, c;
+  for (r = 0; r < lines.length; r++) {
+    var line = lines[r], row = colors[r] || [], cur = null, buf = '', parts = [];
+    for (c = 0; c < line.length; c++) {
+      var ch = line.charAt(c);
+      var col = isBlankChar(ch) ? cur : row[c];
+      if (col !== cur && buf) {
+        parts.push(cur ? '<span style="color:' + cur + '">' + escHtml(buf) + '</span>' : escHtml(buf));
+        buf = '';
+      }
+      cur = col; buf += ch;
+    }
+    if (buf) parts.push(cur ? '<span style="color:' + cur + '">' + escHtml(buf) + '</span>' : escHtml(buf));
+    html.push(parts.join(''));
+  }
+  return html.join('\n');
+}
 function shiftGrid(grid, t) {
   // Threshold as midpoint shift for ramp modes: 128 = neutral
   var d = 128 - t;
@@ -148,6 +208,7 @@ function getSettings() {
     fontSize: parseInt($('fontSize').value, 10) || 10,
     exportPx: parseInt($('exportPx').value, 10) || 14,
     fitView: $('fitView') ? $('fitView').checked : true,
+    color: $('color') ? $('color').checked : false,
     darkBg: $('darkBg').checked
   };
 }
@@ -473,7 +534,9 @@ function convert() {
   state.lastText = text;
   state.lastMode = s.mode;
   var out = $('output');
-  out.textContent = text;
+  state.lastColors = s.color ? buildColorRows(img, text) : null;
+  if (state.lastColors) out.innerHTML = colorHtml(text, state.lastColors);
+  else out.textContent = text;
   out.style.lineHeight = (s.mode === 'braille' ? 1.05 : 1.0);
   // Fit mode uses a fixed measure size then scales; free mode uses slider
   if (s.fitView) {
@@ -574,8 +637,10 @@ function updateMeta() {
   $('fp').textContent = BUILD;
 }
 
+var charsetSync = null; // set in init: keeps preset/box in step with Mode
 function updateThresholdVisibility() {
   var mode = $('mode').value;
+  if (charsetSync) charsetSync(mode);
   var need = mode === 'braille' || mode === 'half';
   $('thresholdRow').hidden = false;
   var tl = $('thresholdLabel');
@@ -720,7 +785,7 @@ function downloadPng() {
   // Defer so status paints, then build (heavy)
   setTimeout(function () {
     try {
-      var result = rasterizeArtToCanvas(lines, cols, rows, wantPx, isBraille, s.darkBg);
+      var result = rasterizeArtToCanvas(lines, cols, rows, wantPx, isBraille, s.darkBg, state.lastColors);
       if (!result || !result.canvas) {
         setStatus('PNG failed: canvas too large — lower Width or PNG export size', true);
         return;
@@ -773,7 +838,7 @@ function downloadPng() {
  * Build a canvas of the art. Shrinks font/scale until within browser limits.
  * @returns {{ canvas: HTMLCanvasElement, note: string } | null}
  */
-function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg) {
+function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg, colors) {
   var attempts = [
     fontPxWant,
     Math.max(4, Math.floor(fontPxWant * 0.75)),
@@ -857,7 +922,17 @@ function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg) 
       // Slight letter-spacing fix: draw per line
       var i;
       for (i = 0; i < rows; i++) {
-        ctx.fillText(lines[i], pad, pad + i * lineH);
+        if (!colors) { ctx.fillText(lines[i], pad, pad + i * lineH); continue; }
+        // Color: draw runs of same color at their cell offset
+        var ln = lines[i], crow = colors[i] || [], j = 0;
+        while (j < ln.length) {
+          if (isBlankChar(ln.charAt(j))) { j++; continue; }
+          var k2 = j + 1;
+          while (k2 < ln.length && (isBlankChar(ln.charAt(k2)) || crow[k2] === crow[j])) k2++;
+          ctx.fillStyle = crow[j] || ctx.fillStyle;
+          ctx.fillText(ln.slice(j, k2), pad + j * cellW, pad + i * lineH);
+          j = k2;
+        }
       }
     } catch (eDraw) {
       continue;
@@ -930,7 +1005,7 @@ function bindDrop() {
 function bindControls() {
   var ids = [
     'mode', 'width', 'invert', 'threshold', 'contrast',
-    'brightness', 'dither', 'fontSize', 'darkBg'
+    'brightness', 'dither', 'fontSize', 'darkBg', 'color'
   ];
   ids.forEach(function (id) {
     var el = $(id);
@@ -997,17 +1072,58 @@ function bindControls() {
   });
 
   $('mode').addEventListener('change', updateThresholdVisibility);
+  if ($('color')) {
+    try { $('color').checked = localStorage.getItem('am.color.v1') === '1'; } catch (e) {}
+    var segBtns = document.querySelectorAll('.seg-btn');
+    var syncSeg = function () {
+      Array.prototype.forEach.call(segBtns, function (b) {
+        b.setAttribute('aria-pressed', (b.dataset.color === '1') === $('color').checked ? 'true' : 'false');
+      });
+    };
+    $('color').addEventListener('change', function () {
+      try { localStorage.setItem('am.color.v1', $('color').checked ? '1' : '0'); } catch (e) {}
+      syncSeg();
+    });
+    Array.prototype.forEach.call(segBtns, function (b) {
+      b.addEventListener('click', function () {
+        var on = b.dataset.color === '1';
+        if ($('color').checked === on) return;
+        $('color').checked = on;
+        $('color').dispatchEvent(new Event('change'));
+      });
+    });
+    syncSeg();
+  }
   (function () {
     var cs = $('charset'), pr = $('charsetPreset');
     if (!cs || !pr) return;
+    // Saved custom set is only used in Custom mode; ascii = Standard, ascii_dense = Detailed
+    var custom = { preset: 'standard', chars: CHARSET_PRESETS.standard };
+    var synced = null;
+    var savedMode = null;
     try {
       var sv = JSON.parse(localStorage.getItem(CHARSET_KEY) || 'null');
-      if (sv) { if (sv.mode && $('mode').querySelector('option[value="' + sv.mode + '"]')) { $('mode').value = sv.mode; updateThresholdVisibility(); }
-        pr.value = sv.preset || 'standard'; cs.value = sv.chars != null ? sv.chars : CHARSET_PRESETS.standard; }
-      else cs.value = CHARSET_PRESETS.standard;
-    } catch (e) { cs.value = CHARSET_PRESETS.standard; }
-    function toCustom() { var m = $('mode'); if (m.value !== 'custom') { m.value = 'custom'; updateThresholdVisibility(); } }
-    function save() { try { localStorage.setItem(CHARSET_KEY, JSON.stringify({ preset: pr.value, chars: cs.value, mode: $('mode').value })); } catch (e) {} }
+      if (sv) {
+        if (sv.chars) custom = { preset: sv.preset || 'custom', chars: sv.chars };
+        if (sv.mode && $('mode').querySelector('option[value="' + sv.mode + '"]')) savedMode = sv.mode;
+      }
+    } catch (e) {}
+    charsetSync = function (mode) {
+      if (mode === synced) return;
+      synced = mode;
+      if (mode === 'ascii') { pr.value = 'standard'; cs.value = CHARSET_PRESETS.standard; }
+      else if (mode === 'ascii_dense') { pr.value = 'detailed'; cs.value = CHARSET_PRESETS.detailed; }
+      else if (mode === 'custom') { pr.value = custom.preset; cs.value = custom.chars; }
+      if (typeof syncSetBtns === 'function') syncSetBtns();
+    };
+    cs.value = CHARSET_PRESETS.standard;
+    if (savedMode) $('mode').value = savedMode;
+    updateThresholdVisibility();
+    function toCustom() { var m = $('mode'); if (m.value !== 'custom') { synced = 'custom'; m.value = 'custom'; updateThresholdVisibility(); } }
+    function save() {
+      if ($('mode').value === 'custom') custom = { preset: pr.value, chars: cs.value };
+      try { localStorage.setItem(CHARSET_KEY, JSON.stringify({ preset: custom.preset, chars: custom.chars, mode: $('mode').value })); } catch (e) {}
+    }
     pr.addEventListener('change', function () {
       if (CHARSET_PRESETS[pr.value] != null) cs.value = CHARSET_PRESETS[pr.value];
       toCustom(); save(); syncSetBtns(); scheduleConvert();
@@ -1015,7 +1131,7 @@ function bindControls() {
     cs.addEventListener('input', function () { pr.value = 'custom'; toCustom(); save(); syncSetBtns(); scheduleConvert(); });
     var btns = document.querySelectorAll('.charset-set');
     function syncSetBtns() {
-      Array.prototype.forEach.call(btns, function (b) {
+      Array.prototype.forEach.call(document.querySelectorAll('.charset-set'), function (b) {
         var set = CHARSET_SETS[b.dataset.set];
         var on = Array.from(set).every(function (c) { return cs.value.indexOf(c) >= 0; });
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
