@@ -167,13 +167,16 @@ function sampleGray(data, w, h, x, y, contrast, brightness) {
 }
 
 /** Floyd–Steinberg dither helper: mutate float gray buffer */
+var ditherLevels = 2;
 function ditherBuffer(buf, w, h) {
   var x, y, i, old, err, neu;
+  var lv = Math.max(2, ditherLevels), step = 255 / (lv - 1);
   for (y = 0; y < h; y++) {
     for (x = 0; x < w; x++) {
       i = y * w + x;
       old = buf[i];
-      neu = old < 128 ? 0 : 255;
+      // Quantize to the ramp's levels (2 = black/white for Braille / half-blocks)
+      neu = clamp(Math.round(old / step), 0, lv - 1) * step;
       err = old - neu;
       buf[i] = neu;
       if (x + 1 < w) buf[i + 1] += err * 7 / 16;
@@ -421,6 +424,8 @@ function convert() {
   );
 
   var text;
+  ditherLevels = ({ blocks: RAMP_BLOCKS.length, blocks_dense: RAMP_BLOCKS_DENSE.length, ascii: RAMP_ASCII.length,
+    ascii_dense: RAMP_ASCII_DENSE.length, custom: customRamp().length })[s.mode] || 2;
   switch (s.mode) {
     case 'braille':
       text = toBraille(grid, gridW, gridH, s.threshold, s.invert);
@@ -575,7 +580,7 @@ function updateThresholdVisibility() {
   $('thresholdRow').hidden = false;
   var tl = $('thresholdLabel');
   if (tl) tl.textContent = need ? 'Threshold' : 'Threshold (midtone)';
-  if ($('charsetRow')) $('charsetRow').hidden = mode !== 'custom';
+  if ($('charsetRow')) $('charsetRow').hidden = !(mode === 'custom' || mode === 'ascii' || mode === 'ascii_dense');
   $('ditherHint').textContent = need
     ? 'Dither before threshold (Braille / half-blocks)'
     : 'Dither on gray ramp';
@@ -997,15 +1002,17 @@ function bindControls() {
     if (!cs || !pr) return;
     try {
       var sv = JSON.parse(localStorage.getItem(CHARSET_KEY) || 'null');
-      if (sv) { pr.value = sv.preset || 'standard'; cs.value = sv.chars != null ? sv.chars : CHARSET_PRESETS.standard; }
+      if (sv) { if (sv.mode && $('mode').querySelector('option[value="' + sv.mode + '"]')) { $('mode').value = sv.mode; updateThresholdVisibility(); }
+        pr.value = sv.preset || 'standard'; cs.value = sv.chars != null ? sv.chars : CHARSET_PRESETS.standard; }
       else cs.value = CHARSET_PRESETS.standard;
     } catch (e) { cs.value = CHARSET_PRESETS.standard; }
-    function save() { try { localStorage.setItem(CHARSET_KEY, JSON.stringify({ preset: pr.value, chars: cs.value })); } catch (e) {} }
+    function toCustom() { var m = $('mode'); if (m.value !== 'custom') { m.value = 'custom'; updateThresholdVisibility(); } }
+    function save() { try { localStorage.setItem(CHARSET_KEY, JSON.stringify({ preset: pr.value, chars: cs.value, mode: $('mode').value })); } catch (e) {} }
     pr.addEventListener('change', function () {
       if (CHARSET_PRESETS[pr.value] != null) cs.value = CHARSET_PRESETS[pr.value];
-      save(); scheduleConvert();
+      toCustom(); save(); syncSetBtns(); scheduleConvert();
     });
-    cs.addEventListener('input', function () { pr.value = 'custom'; save(); syncSetBtns(); scheduleConvert(); });
+    cs.addEventListener('input', function () { pr.value = 'custom'; toCustom(); save(); syncSetBtns(); scheduleConvert(); });
     var btns = document.querySelectorAll('.charset-set');
     function syncSetBtns() {
       Array.prototype.forEach.call(btns, function (b) {
@@ -1017,10 +1024,11 @@ function bindControls() {
     Array.prototype.forEach.call(btns, function (b) {
       b.addEventListener('click', function () {
         cs.value = toggleSet(cs.value, CHARSET_SETS[b.dataset.set]);
-        pr.value = 'custom'; save(); syncSetBtns(); scheduleConvert();
+        pr.value = 'custom'; toCustom(); save(); syncSetBtns(); scheduleConvert();
       });
     });
     pr.addEventListener('change', syncSetBtns);
+    $('mode').addEventListener('change', save);
     syncSetBtns();
   })();
 
