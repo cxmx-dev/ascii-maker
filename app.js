@@ -2,10 +2,10 @@
 
 /**
  * ascii-maker — Braille (2×4) + Unicode block / shade converters
- * BUILD: am-v5
+ * BUILD: am-v6
  */
 
-var BUILD = 'am-v5';
+var BUILD = 'am-v6';
 
 var MONO_STACK = '"Cascadia Code", "Consolas", "Segoe UI Symbol", "Noto Sans Symbols 2", ui-monospace, monospace';
 // Browser canvas soft cap (edge px). Stay under Chrome/Edge practical limits.
@@ -270,6 +270,9 @@ function getSettings() {
     contrast: parseFloat($('contrast').value) || 1,
     // Slider = visible brightness: on dark bg ink is light, so flip sign (Invert flips again)
     brightness: (parseInt($('brightness').value, 10) || 0) * ($('darkBg').checked !== $('invert').checked ? -1 : 1),
+    gamma: (function () { var g = $('gamma') ? parseFloat($('gamma').value) : 1; GAMMA_INV = 1 / (g || 1); GAMMA_FLIP = $('darkBg').checked !== $('invert').checked; return g || 1; })(),
+    weight: (GLYPH_W = $('weight') ? parseInt($('weight').value, 10) || 0 : 0),
+    glow: (GLYPH_GLOW = $('glow') ? parseInt($('glow').value, 10) || 0 : 0),
     dither: $('dither').checked,
     fontSize: parseInt($('fontSize').value, 10) || 10,
     exportPx: parseInt($('exportPx').value, 10) || 14,
@@ -282,6 +285,23 @@ function getSettings() {
   };
 }
 
+// Gamma in on-screen space: >1 lifts midtones visibly brighter in any bg/invert combo; 1 = no-op
+var GAMMA_INV = 1, GAMMA_FLIP = false;
+// Glyph weight (0 normal, 1 bold, 2 heavy) and glow (0-100); 0/0 = untouched output
+var GLYPH_W = 0, GLYPH_GLOW = 0;
+function applyGlyphStyle(el) {
+  if (!el) return;
+  el.style.fontWeight = GLYPH_W ? '700' : '';
+  el.style.webkitTextStroke = GLYPH_W ? (GLYPH_W * 0.035).toFixed(3) + 'em currentColor' : '';
+  if (GLYPH_GLOW) { var g = GLYPH_GLOW / 100; el.style.textShadow = '0 0 ' + (g * 0.35).toFixed(3) + 'em currentColor, 0 0 ' + (g * 1.1).toFixed(3) + 'em currentColor'; }
+  else el.style.textShadow = '';
+}
+function applyGamma(L) {
+  if (GAMMA_INV === 1) return L;
+  var v = clamp(GAMMA_FLIP ? 255 - L : L, 0, 255);
+  v = 255 * Math.pow(v / 255, GAMMA_INV);
+  return GAMMA_FLIP ? 255 - v : v;
+}
 function sampleGray(data, w, h, x, y, contrast, brightness) {
   x = clamp(Math.floor(x), 0, w - 1);
   y = clamp(Math.floor(y), 0, h - 1);
@@ -293,7 +313,7 @@ function sampleGray(data, w, h, x, y, contrast, brightness) {
   if (a < 16) return 255; // transparent → white (empty)
   var L = luminance(r, g, b);
   L = (L - 128) * contrast + 128 + brightness;
-  return clamp(L, 0, 255);
+  return clamp(applyGamma(L), 0, 255);
 }
 
 /** Floyd–Steinberg dither helper: mutate float gray buffer */
@@ -615,6 +635,7 @@ function convert() {
   } else {
     out.style.fontSize = s.fontSize + 'px';
   }
+  applyGlyphStyle(out);
   document.body.classList.toggle('theme-light', !s.darkBg);
   document.body.classList.toggle('theme-dark', s.darkBg);
   document.body.classList.toggle('fit-on', s.fitView);
@@ -909,6 +930,18 @@ function downloadPng() {
  * Build a canvas of the art. Shrinks font/scale until within browser limits.
  * @returns {{ canvas: HTMLCanvasElement, note: string } | null}
  */
+// PNG export: mirror weight (offset re-draws) and glow (shadowBlur in the glyph color)
+function wrapGlyphFill(ctx, fontPx) {
+  if (!GLYPH_W && !GLYPH_GLOW) return;
+  var fill = ctx.fillText.bind(ctx);
+  var off = fontPx * 0.035 * GLYPH_W;
+  ctx.fillText = function (t, x, y) {
+    if (GLYPH_GLOW) { ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = fontPx * 1.1 * GLYPH_GLOW / 100; fill(t, x, y); }
+    ctx.shadowBlur = 0;
+    fill(t, x, y);
+    if (off) { fill(t, x + off, y); fill(t, x, y + off * 0.5); fill(t, x + off, y + off * 0.5); }
+  };
+}
 function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg, colors, zm) {
   var attempts = [
     fontPxWant,
@@ -990,6 +1023,7 @@ function rasterizeArtToCanvas(lines, cols, rows, fontPxWant, isBraille, darkBg, 
       ctx.font = fontPx + 'px ' + MONO_STACK;
       ctx.textBaseline = 'top';
       ctx.textAlign = 'left';
+      wrapGlyphFill(ctx, fontPx);
       // Slight letter-spacing fix: draw per line
       var i;
       for (i = 0; i < rows; i++) {
@@ -1082,7 +1116,7 @@ function bindDrop() {
 function bindControls() {
   var ids = [
     'mode', 'width', 'invert', 'threshold', 'contrast',
-    'brightness', 'dither', 'fontSize', 'darkBg', 'color', 'tint', 'colorAmount', 'zalgo', 'zalgoAmt'
+    'brightness', 'gamma', 'weight', 'glow', 'dither', 'fontSize', 'darkBg', 'color', 'tint', 'colorAmount', 'zalgo', 'zalgoAmt'
   ];
   ids.forEach(function (id) {
     var el = $(id);
@@ -1104,6 +1138,9 @@ function bindControls() {
   bindLabel('threshold', 'thresholdVal', function (v) { return v; });
   bindLabel('contrast', 'contrastVal', function (v) { return Number(v).toFixed(2); });
   bindLabel('brightness', 'brightnessVal', function (v) { return v; });
+  bindLabel('gamma', 'gammaVal', function (v) { return Number(v).toFixed(2); });
+  bindLabel('weight', 'weightVal', function (v) { return ['Normal', 'Bold', 'Heavy'][v] || 'Normal'; });
+  bindLabel('glow', 'glowVal', function (v) { return v === '0' ? 'off' : v; });
   bindLabel('fontSize', 'fontSizeVal', function (v) { return v + 'px'; });
   bindLabel('exportPx', 'exportPxVal', function (v) { return v + 'px'; });
 
