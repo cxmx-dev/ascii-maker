@@ -2,10 +2,10 @@
 
 /**
  * ascii-maker — Braille (2×4) + Unicode block / shade converters
- * BUILD: am-v4
+ * BUILD: am-v5
  */
 
-var BUILD = 'am-v4';
+var BUILD = 'am-v5';
 
 var MONO_STACK = '"Cascadia Code", "Consolas", "Segoe UI Symbol", "Noto Sans Symbols 2", ui-monospace, monospace';
 // Browser canvas soft cap (edge px). Stay under Chrome/Edge practical limits.
@@ -268,7 +268,8 @@ function getSettings() {
     invert: $('invert').checked,
     threshold: parseInt($('threshold').value, 10) || 128,
     contrast: parseFloat($('contrast').value) || 1,
-    brightness: parseInt($('brightness').value, 10) || 0,
+    // Slider = visible brightness: on dark bg ink is light, so flip sign (Invert flips again)
+    brightness: (parseInt($('brightness').value, 10) || 0) * ($('darkBg').checked !== $('invert').checked ? -1 : 1),
     dither: $('dither').checked,
     fontSize: parseInt($('fontSize').value, 10) || 10,
     exportPx: parseInt($('exportPx').value, 10) || 14,
