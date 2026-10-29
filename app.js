@@ -2,10 +2,10 @@
 
 /**
  * ascii-maker — Braille (2×4) + Unicode block / shade converters
- * BUILD: am-v7
+ * BUILD: am-v8
  */
 
-var BUILD = 'am-v7';
+var BUILD = 'am-v8';
 
 var MONO_STACK = '"Cascadia Code", "Consolas", "Segoe UI Symbol", "Noto Sans Symbols 2", ui-monospace, monospace';
 // Browser canvas soft cap (edge px). Stay under Chrome/Edge practical limits.
@@ -419,10 +419,22 @@ function toHalfBlocks(grid, gw, gh, threshold, invert) {
   return lines.join('\n');
 }
 
-function equalizeGrid(g) {
-  // Rank-based spread: every char in the ramp gets an equal share of cells
-  var idx = Array.from(g.keys()).sort(function (p, q) { return g[p] - g[q]; });
-  for (var k = 0; k < idx.length; k++) g[idx[k]] = idx.length > 1 ? 255 * k / (idx.length - 1) : 128;
+var SPREAD_MIN = 0.35; // every ramp level keeps at least 35% of an even share
+function equalizeGrid(g, raw, n) {
+  // Tone settings (gamma, brightness, contrast, threshold) pick each level's natural share;
+  // blending with an even share guarantees every character is still used.
+  var N = g.length, j, k;
+  n = Math.max(2, n || 2);
+  if (N < 2) return g;
+  var hist = new Array(n).fill(0);
+  for (k = 0; k < N; k++) hist[clamp(Math.round(g[k] / 255 * (n - 1)), 0, n - 1)]++;
+  var order = Array.from(g.keys()).sort(function (p, q) { return (g[p] - g[q]) || (raw[p] - raw[q]); });
+  var acc = 0, pos = 0;
+  for (j = 0; j < n; j++) {
+    acc += SPREAD_MIN * N / n + (1 - SPREAD_MIN) * hist[j];
+    var end = j === n - 1 ? N : Math.round(acc);
+    for (; pos < end; pos++) g[order[pos]] = 255 * j / (n - 1);
+  }
   return g;
 }
 function toRamp(grid, gw, gh, ramp, invert, roundIdx) {
@@ -624,8 +636,21 @@ function convert() {
       var spread = !$('spreadChars') || $('spreadChars').checked;
       var gc = buildGrayGrid(imgData, gridW, gridH, charCols, charRows, s.contrast, s.brightness, false);
       shiftGrid(gc, s.threshold);
-      if (spread) equalizeGrid(gc);
-      if (useDither) ditherBuffer(gc, charCols, charRows);
+      if (spread) {
+        // Tone settings are applied with a soft (sigmoid) clip instead of a hard clamp, so
+        // gamma, brightness, contrast and threshold always change the level shares.
+        var gInv = GAMMA_INV; GAMMA_INV = 1;
+        var raw = buildGrayGrid(imgData, gridW, gridH, charCols, charRows, 1, 0, false);
+        GAMMA_INV = gInv;
+        for (var q = 0; q < gc.length; q++) {
+          var L = (raw[q] - 128) * s.contrast + 128 + s.brightness + (128 - s.threshold);
+          var v = 1 / (1 + Math.exp(-(L - 128) / 64));
+          v = GAMMA_FLIP ? 1 - Math.pow(1 - v, GAMMA_INV) : Math.pow(v, GAMMA_INV);
+          gc[q] = 255 * v;
+        }
+        if (useDither) ditherBuffer(gc, charCols, charRows);
+        equalizeGrid(gc, raw, customRamp().length);
+      } else if (useDither) ditherBuffer(gc, charCols, charRows);
       text = toRamp(gc, charCols, charRows, customRamp(), s.invert, spread);
       }
       break;
