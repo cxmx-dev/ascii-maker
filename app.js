@@ -2,10 +2,10 @@
 
 /**
  * ascii-maker — Braille (2×4) + Unicode block / shade converters
- * BUILD: am-v6
+ * BUILD: am-v7
  */
 
-var BUILD = 'am-v6';
+var BUILD = 'am-v7';
 
 var MONO_STACK = '"Cascadia Code", "Consolas", "Segoe UI Symbol", "Noto Sans Symbols 2", ui-monospace, monospace';
 // Browser canvas soft cap (edge px). Stay under Chrome/Edge practical limits.
@@ -42,7 +42,10 @@ function customRamp() {
   Array.from(v).forEach(function (c) { if (!seen[c]) { seen[c] = 1; out += c; } });
   if (!out) out = CHARSET_PRESETS.standard;
   if (out.length === 1) out += ' ';
-  // input is dark -> light; toRamp wants light -> dense
+  // Auto-sort by real glyph ink (darkest first), space always at the light end
+  var hasSp = out.indexOf(' ') >= 0;
+  out = sortByDensity(out.replace(/ /g, '')) + (hasSp ? ' ' : '');
+  if (out.length === 1) out += ' ';
   return Array.from(out).reverse().join('');
 }
 var CHARSET_SETS = {
@@ -416,7 +419,13 @@ function toHalfBlocks(grid, gw, gh, threshold, invert) {
   return lines.join('\n');
 }
 
-function toRamp(grid, gw, gh, ramp, invert) {
+function equalizeGrid(g) {
+  // Rank-based spread: every char in the ramp gets an equal share of cells
+  var idx = Array.from(g.keys()).sort(function (p, q) { return g[p] - g[q]; });
+  for (var k = 0; k < idx.length; k++) g[idx[k]] = idx.length > 1 ? 255 * k / (idx.length - 1) : 128;
+  return g;
+}
+function toRamp(grid, gw, gh, ramp, invert, roundIdx) {
   var lines = [];
   var y, x, g, idx, n;
   n = ramp.length;
@@ -425,7 +434,7 @@ function toRamp(grid, gw, gh, ramp, invert) {
     for (x = 0; x < gw; x++) {
       g = grayAt(grid, gw, gh, x, y, invert);
       // low gray (dark) → denser char (end of ramp)
-      idx = Math.floor((1 - g / 255) * (n - 1));
+      idx = (roundIdx ? Math.round : Math.floor)((1 - g / 255) * (n - 1));
       idx = clamp(idx, 0, n - 1);
       line += ramp.charAt(idx);
     }
@@ -612,8 +621,12 @@ function convert() {
       break;
     case 'custom':
       {
-        var gc = buildGrayGrid(imgData, gridW, gridH, charCols, charRows, s.contrast, s.brightness, useDither);
-        text = toRamp(shiftGrid(gc, s.threshold), charCols, charRows, customRamp(), s.invert);
+      var spread = !$('spreadChars') || $('spreadChars').checked;
+      var gc = buildGrayGrid(imgData, gridW, gridH, charCols, charRows, s.contrast, s.brightness, false);
+      shiftGrid(gc, s.threshold);
+      if (spread) equalizeGrid(gc);
+      if (useDither) ditherBuffer(gc, charCols, charRows);
+      text = toRamp(gc, charCols, charRows, customRamp(), s.invert, spread);
       }
       break;
     default:
@@ -1299,6 +1312,7 @@ function bindControls() {
       toCustom(); save(); syncSetBtns(); scheduleConvert();
     });
     cs.addEventListener('input', function () { pr.value = 'custom'; toCustom(); save(); syncSetBtns(); scheduleConvert(); });
+  if ($('spreadChars')) $('spreadChars').addEventListener('change', scheduleConvert);
     var btns = document.querySelectorAll('.charset-set');
     function syncSetBtns() {
       Array.prototype.forEach.call(document.querySelectorAll('.charset-set'), function (b) {

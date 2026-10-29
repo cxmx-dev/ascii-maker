@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark light" />
-  <title>ascii-maker · am-v6</title>
+  <title>ascii-maker · am-v7</title>
   <script src="device.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -12,7 +12,7 @@
   <div class="app">
     <header class="top">
       <div class="brand">
-        <h1>ascii-maker <span id="fp" class="fp">am-v6</span></h1>
+        <h1>ascii-maker <span id="fp" class="fp">am-v7</span></h1>
         <p class="tag">Braille · block · shade — local, real-time</p>
       </div>
       <div class="actions">
@@ -70,6 +70,7 @@
             <button type="button" class="btn charset-set" data-set="symbols" aria-pressed="false">!@#</button>
           </div>
           <p class="hint">Type your own characters, darkest first, or tap a set to add/remove it (auto-sorted by darkness). Add a space at the end for blank areas.</p>
+<label class="check"><input type="checkbox" id="spreadChars" checked /> Use every character evenly</label>
         </div>
 
         <label class="field" id="thresholdRow">
