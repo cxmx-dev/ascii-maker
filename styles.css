@@ -488,3 +488,8 @@ html.input-touch .tips summary { min-height: 44px; }
 .zinfo-btn { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; border: 1px solid rgba(127, 127, 127, 0.4); background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer; margin-top: 8px; }
 .zinfo-btn[aria-expanded="true"] { background: rgba(60, 200, 150, 0.22); }
 .zalgo-check { margin-top: 8px; min-height: 44px; display: flex; align-items: center; gap: 8px; }
+
+/* PETSCII mode: crisp C64 pixels */
+.petscii-view { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+.petscii-view[hidden] { display: none; }
+#petText { width: 100%; resize: vertical; font-family: ui-monospace, monospace; }

@@ -557,7 +557,61 @@ function computeCharGrid(mode, charCols, imgW, imgH) {
   };
 }
 
+// ── PETSCII (C64 40×25 text screen), see petscii.js ──
+function petsciiOn() { return $('mode').value === 'petscii' && typeof PETSCII !== 'undefined'; }
+function petsciiSource() { var b = document.querySelector('.seg-btn[data-ps="text"]'); return b && b.getAttribute('aria-pressed') === 'true' ? 'text' : 'image'; }
+function convertPetscii() {
+  var s = getSettings(), out = $('output'), view = $('petsciiView');
+  var cs = $('petCharset').value, bgSel = parseInt($('petBg').value, 10), cols = clamp(s.width, 8, 40), rows, scr, bg;
+  if (petsciiSource() === 'text') {
+    bg = bgSel >= 0 ? bgSel : 6;
+    scr = PETSCII.textToScreen($('petText').value || '', cols, 25, cs, parseInt($('petFg').value, 10));
+  } else {
+    if (!state.image) { state.lastText = ''; view.hidden = true; updateMeta(); return; }
+    var img = state.image;
+    rows = Math.max(1, Math.round(cols * img.height / Math.max(1, img.width)));
+    if (rows > 25) { rows = 25; cols = clamp(Math.round(25 * img.width / Math.max(1, img.height)), 1, 40); }
+    var c = state.canvas, ctx = state.ctx, W = cols * 8, H = rows * 8;
+    c.width = W; c.height = H;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.fillStyle = s.darkBg ? '#000' : '#fff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(img, 0, 0, W, H);
+    var d = ctx.getImageData(0, 0, W, H), px = d.data, i, k, v;
+    // Tone sliders act on each channel (brightness slider is on-screen brightness here)
+    var br = parseInt($('brightness').value, 10) || 0, gi = 1 / (s.gamma || 1);
+    for (i = 0; i < px.length; i += 4) for (k = 0; k < 3; k++) {
+      v = (px[i + k] - 128) * s.contrast + 128 + br;
+      v = 255 * Math.pow(clamp(v, 0, 255) / 255, gi);
+      px[i + k] = s.invert ? 255 - v : v;
+    }
+    scr = PETSCII.imageToScreen(px, cols, rows, cs, bgSel);
+    bg = scr.bg;
+  }
+  state.petscii = { scr: scr, cs: cs, bg: bg };
+  view.width = scr.cols * 8; view.height = scr.rows * 8;
+  PETSCII.paint(view.getContext('2d'), scr, cs, bg, 1, 0);
+  view.style.width = s.fitView ? '' : (scr.cols * 8 * s.fontSize / 8) + 'px';
+  view.hidden = false; out.hidden = true; out.textContent = '';
+  state.lastText = PETSCII.toText(scr, cs);
+  state.lastMode = 'petscii'; state.lastColors = null; state.zMarks = null;
+  state.lastGridInfo = { glyphAsp: 1 };
+  document.body.classList.toggle('fit-on', s.fitView);
+  updateMeta(); updateThresholdVisibility(); updatePreviewSizeVisibility(); scheduleFit();
+}
+function petsciiDownload(kind) {
+  if (!state.petscii) { setStatus('Nothing to export', true); return; }
+  var p = state.petscii, base = (state.imageName || 'petscii').replace(/\.[^.]+$/, '') + '-petscii';
+  var blob = kind === 'bin' ? new Blob([PETSCII.toBin(p.scr, p.bg)], { type: 'application/octet-stream' })
+    : new Blob([PETSCII.toAsm(p.scr, p.bg, p.cs)], { type: 'text/plain;charset=utf-8' });
+  var name = base + (kind === 'bin' ? '.bin' : '-bytes.txt');
+  triggerBlobDownload(blob, name);
+  setStatus('Downloaded ' + name);
+}
+
 function convert() {
+  if (petsciiOn()) { convertPetscii(); return; }
+  if ($('petsciiView')) { $('petsciiView').hidden = true; $('output').hidden = false; }
   if (!state.image || !state.canvas) {
     $('output').textContent = '';
     state.lastText = '';
@@ -687,7 +741,7 @@ function convert() {
 function fitOutputToStage() {
   var viewport = $('stageViewport');
   var wrap = $('scaleWrap');
-  var out = $('output');
+  var out = petsciiOn() && $('petsciiView') && !$('petsciiView').hidden ? $('petsciiView') : $('output');
   if (!viewport || !wrap || !out) return;
 
   var fit = $('fitView') && $('fitView').checked;
@@ -706,8 +760,8 @@ function fitOutputToStage() {
   wrap.style.height = 'auto';
 
   // Natural glyph size at measure font
-  var nw = out.scrollWidth;
-  var nh = out.scrollHeight;
+  var nw = out.tagName === 'CANVAS' ? out.width : out.scrollWidth;
+  var nh = out.tagName === 'CANVAS' ? out.height : out.scrollHeight;
   if (nw < 1 || nh < 1) return;
 
   var pad = 12;
@@ -775,6 +829,7 @@ function updateThresholdVisibility() {
   $('thresholdRow').hidden = false;
   var tl = $('thresholdLabel');
   if (tl) tl.textContent = need ? 'Threshold' : 'Threshold (midtone)';
+  if ($('petsciiRow')) $('petsciiRow').hidden = mode !== 'petscii';
   if ($('charsetRow')) $('charsetRow').hidden = !(mode === 'custom' || mode === 'ascii' || mode === 'ascii_dense');
   $('ditherHint').textContent = need
     ? 'Dither before threshold (Braille / half-blocks)'
@@ -892,6 +947,19 @@ function downloadPng() {
   }
 
   var s = getSettings();
+  if (state.lastMode === 'petscii' && state.petscii) {
+    var ps = state.petscii, pk = Math.max(1, Math.round(clamp(s.exportPx, 4, 64) / 8));
+    var pc = document.createElement('canvas');
+    pc.width = ps.scr.cols * 8 * pk; pc.height = ps.scr.rows * 8 * pk;
+    PETSCII.paint(pc.getContext('2d'), ps.scr, ps.cs, ps.bg, pk, 0);
+    var pname = (state.imageName || 'ascii').replace(/\.[^.]+$/, '') + '-petscii-' + ps.scr.cols + 'x' + ps.scr.rows + '.png';
+    pc.toBlob(function (blob) {
+      triggerBlobDownload(blob, pname);
+      setStatus('PNG saved ' + pc.width + '×' + pc.height + ' px · ' + ps.scr.cols + '×' + ps.scr.rows + ' cells');
+      flashBtn($('btnPng'));
+    }, 'image/png');
+    return;
+  }
   var lines = state.lastText.split('\n');
   var rows = lines.length;
   var cols = 0;
@@ -1211,6 +1279,8 @@ function bindControls() {
     state.imageName = '';
     state.lastText = '';
     $('output').textContent = '';
+    state.petscii = null;
+    if ($('petsciiView')) { $('petsciiView').hidden = true; $('output').hidden = false; }
     $('drop').classList.remove('has-image');
     var wrap = $('scaleWrap');
     if (wrap) {
@@ -1355,6 +1425,25 @@ function bindControls() {
     pr.addEventListener('change', syncSetBtns);
     $('mode').addEventListener('change', save);
     syncSetBtns();
+  })();
+
+  if ($('petsciiRow') && typeof PETSCII !== 'undefined') (function () {
+    var bgEl = $('petBg'), fgEl = $('petFg');
+    PETSCII.NAMES.forEach(function (n, i) {
+      bgEl.add(new Option(i + ' · ' + n, String(i)));
+      fgEl.add(new Option(i + ' · ' + n, String(i), i === 14, i === 14));
+    });
+    var psBtns = document.querySelectorAll('.seg-btn[data-ps]');
+    Array.prototype.forEach.call(psBtns, function (b) {
+      b.addEventListener('click', function () {
+        Array.prototype.forEach.call(psBtns, function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+        $('petTextRow').hidden = b.dataset.ps !== 'text';
+        scheduleConvert();
+      });
+    });
+    ['petCharset', 'petBg', 'petFg', 'petText'].forEach(function (id) { $(id).addEventListener('input', scheduleConvert); $(id).addEventListener('change', scheduleConvert); });
+    $('btnPetBin').addEventListener('click', function () { petsciiDownload('bin'); });
+    $('btnPetAsm').addEventListener('click', function () { petsciiDownload('asm'); });
   })();
 
   window.addEventListener('resize', scheduleFit);

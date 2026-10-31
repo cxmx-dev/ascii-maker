@@ -44,6 +44,7 @@
             <option value="ascii">ASCII simple</option>
             <option value="ascii_dense">ASCII dense</option>
             <option value="custom">Custom characters</option>
+            <option value="petscii">PETSCII (C64 40×25)</option>
           </select>
         </label>
 
@@ -71,6 +72,29 @@
           </div>
           <p class="hint">Type your own characters, darkest first, or tap a set to add/remove it (auto-sorted by darkness). Add a space at the end for blank areas.</p>
 <label class="check"><input type="checkbox" id="spreadChars" checked /> Use every character evenly</label>
+        </div>
+
+        <div class="field" id="petsciiRow" hidden>
+          <label class="field"><span class="field-label">C64 charset</span>
+            <select id="petCharset">
+              <option value="upper" selected>Uppercase / graphics</option>
+              <option value="lower">Lower / upper case</option>
+            </select></label>
+          <label class="field"><span class="field-label">Background</span>
+            <select id="petBg"><option value="-1" selected>Auto (best fit)</option></select></label>
+          <div class="seg" role="group" aria-label="PETSCII source">
+            <button type="button" class="seg-btn" data-ps="image" aria-pressed="true">Image</button>
+            <button type="button" class="seg-btn" data-ps="text" aria-pressed="false">Text</button>
+          </div>
+          <div class="field" id="petTextRow" hidden>
+            <textarea id="petText" class="charset-input" rows="4" maxlength="1000" spellcheck="false" autocomplete="off" placeholder="Type text for the C64 screen"></textarea>
+            <label class="field"><span class="field-label">Text colour</span><select id="petFg"></select></label>
+          </div>
+          <div class="charset-sets" role="group" aria-label="PETSCII export">
+            <button type="button" id="btnPetBin" class="btn">.bin</button>
+            <button type="button" id="btnPetAsm" class="btn">!byte .txt</button>
+          </div>
+          <p class="hint">Real 8×8 cells, per-cell colour on one background (C64 hi-res text). Width is capped at 40, rows at 25. .bin = 1000 screen codes + 1000 colour RAM bytes. Palette: Pepto.</p>
         </div>
 
         <label class="field" id="thresholdRow">
@@ -169,12 +193,15 @@
         <div id="stageViewport" class="stage-viewport">
           <div id="scaleWrap" class="scale-wrap">
             <pre id="output" class="output" spellcheck="false"></pre>
+            <canvas id="petsciiView" class="petscii-view" hidden></canvas>
           </div>
         </div>
       </main>
     </div>
   </div>
 
+  <script src="petscii.js"></script>
   <script src="app.js"></script>
+  <script>document.addEventListener('contextmenu',e=>e.preventDefault());</script>
 </body>
 </html>
